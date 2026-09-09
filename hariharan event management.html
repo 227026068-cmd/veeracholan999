@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hariharan Event Management</title>
+
+  <style>
+    /* ==========================================================
+       THEME & DESIGN TOKENS (ZERO EXTERNAL DEPENDENCIES)
+       ========================================================== */
+    :root {
+      --bg-dark: #07090E;
+      --bg-card: rgba(16, 22, 34, 0.75);
+      --gold-primary: #D4AF37;
+      --gold-light: #F7E7B4;
+      --gold-dark: #8C6F1E;
+      --gold-gradient: linear-gradient(135deg, #FBECC4 0%, #D4AF37 50%, #8C6F1E 100%);
+      --gold-glow: rgba(212, 175, 55, 0.35);
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+
+      /* Elegant offline luxury typography stack */
+      --font-heading: 'Cinzel', 'Playfair Display', 'Times New Roman', 'Baskerville', 'Georgia', serif;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Interactive Fluid Cursor Canvas */
+    #cursor-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Pure Native Math 3D Background Canvas */
+    #ambient-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.75;
+    }
+
+    /* ==========================================================
+       SPATIAL 3D STAGE & PORTAL VIEWPORT
+       ========================================================== */
+    .viewport-scene {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      perspective: 1200px;
+      perspective-origin: center center;
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    .chamber {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8vw;
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+      transform-style: preserve-3d;
+      transition: transform 1.2s cubic-bezier(0.7, 0, 0.2, 1), 
+                  opacity 0.9s cubic-bezier(0.7, 0, 0.2, 1),
+                  filter 0.9s ease;
+      will-change: transform, opacity, filter;
+    }
+
+    .chamber.active {
+      opacity: 1;
+      pointer-events: auto;
+      visibility: visible;
+      transform: translateZ(0) rotateX(0deg) scale(1);
+      filter: blur(0px);
+      z-index: 10;
+    }
+
+    .chamber.recede-back {
+      opacity: 0;
+      pointer-events: none;
+      visibility: visible;
+      transform: translateZ(-500px) rotateX(15deg) scale(0.85);
+      filter: blur(8px);
+      z-index: 5;
+    }
+
+    .chamber.wait-front {
+      opacity: 0;
+      pointer-events: none;
+      visibility: visible;
+      transform: translateZ(400px) rotateX(-15deg) scale(1.15);
+      filter: blur(8px);
+      z-index: 15;
+    }
+
+    /* ==========================================================
+       LIQUID IRIS TRANSITION SHUTTER
+       ========================================================== */
+    .iris-portal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .iris-portal svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .iris-path {
+      fill: none;
+      stroke: var(--gold-primary);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 12px var(--gold-glow));
+    }
+
+    .liquid-veil {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, transparent 0%, rgba(7, 9, 14, 0.95) 100%);
+      pointer-events: none;
+      z-index: 50;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+
+    .liquid-veil.active {
+      opacity: 1;
+    }
+
+    /* ==========================================================
+       HEADER & NAVIGATION
+       ========================================================== */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 200;
+      padding: 24px 8vw;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(7, 9, 14, 0.9) 0%, transparent 100%);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .brand-svg {
+      width: 32px;
+      height: 32px;
+      fill: var(--gold-primary);
+      filter: drop-shadow(0 0 8px var(--gold-glow));
+    }
+
+    .brand-text h1 {
+      font-family: var(--font-heading);
+      font-size: 1.25rem;
+      letter-spacing: 2.5px;
+    }
+
+    .brand-text span {
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      display: block;
+    }
+
+    /* Morphing Side Nav Dots */
+    .portal-nav {
+      position: fixed;
+      right: 3vw;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .portal-dot {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      background: rgba(16, 22, 34, 0.65);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.4s ease;
+    }
+
+    .portal-dot span {
+      position: absolute;
+      right: 55px;
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      background: rgba(7, 9, 14, 0.95);
+      padding: 4px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--gold-dark);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(10px);
+      transition: all 0.3s ease;
+      white-space: nowrap;
+    }
+
+    .portal-dot:hover span {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .portal-dot::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .portal-dot.active {
+      border-color: var(--gold-primary);
+      box-shadow: 0 0 15px var(--gold-glow);
+      transform: scale(1.15);
+    }
+
+    .portal-dot.active::after {
+      background: var(--gold-primary);
+      box-shadow: 0 0 10px var(--gold-light);
+      transform: scale(1.4);
+    }
+
+    /* ==========================================================
+       CONTENT ELEMENTS
+       ========================================================== */
+    .content-card {
+      max-width: 1200px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .tagline {
+      display: inline-block;
+      font-size: 0.8rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--gold-primary);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .title {
+      font-family: var(--font-heading);
+      font-size: clamp(2.4rem, 4.2vw, 3.8rem);
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+
+    .gold-gradient {
+      background: var(--gold-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-block;
+    }
+
+    .description {
+      color: var(--text-muted);
+      font-size: 1.02rem;
+      line-height: 1.7;
+      margin-bottom: 35px;
+    }
+
+    .btn-gold {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 15px 34px;
+      background: var(--gold-gradient);
+      color: #07090E;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 8px 30px var(--gold-glow);
+      transition: all 0.3s ease;
+    }
+
+    .btn-gold:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 12px 40px rgba(212, 175, 55, 0.55);
+    }
+
+    /* Native CSS Procedural Visual Stage Frames (Zero External Images) */
+    .visual-stage {
+      position: relative;
+      height: 440px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(212, 175, 55, 0.1);
+      transform: rotateY(-8deg) rotateX(4deg);
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: flex-end;
+      padding: 30px;
+    }
+
+    .visual-stage:hover {
+      transform: rotateY(0deg) rotateX(0deg) scale(1.02);
+    }
+
+    .visual-bg-1 {
+      background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.25), transparent 60%),
+                  linear-gradient(135deg, #161D2B 0%, #0A0D14 100%);
+    }
+
+    .visual-bg-2 {
+      background: radial-gradient(circle at top left, rgba(247, 231, 180, 0.2), transparent 55%),
+                  linear-gradient(135deg, #1C182B 0%, #0A0D14 100%);
+    }
+
+    .visual-bg-3 {
+      background: radial-gradient(circle at bottom right, rgba(212, 175, 55, 0.22), transparent 50%),
+                  linear-gradient(135deg, #142426 0%, #070A0F 100%);
+    }
+
+    .stage-badge {
+      background: rgba(7, 9, 14, 0.85);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      backdrop-filter: blur(15px);
+      padding: 16px 24px;
+      border-radius: 8px;
+    }
+
+    /* Services Grid */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .feature-box {
+      background: var(--bg-card);
+      border: 1px solid rgba(212, 175, 55, 0.18);
+      padding: 22px;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .feature-box:hover {
+      transform: translateY(-4px);
+      border-color: var(--gold-primary);
+    }
+
+    .feature-svg {
+      width: 28px;
+      height: 28px;
+      fill: var(--gold-primary);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    /* Forms */
+    .contact-panel {
+      background: var(--bg-card);
+      padding: 35px;
+      border-radius: 12px;
+      border: 1px solid rgba(212,175,55,0.25);
+      backdrop-filter: blur(15px);
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 14px;
+      background: rgba(7,9,14,0.8);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #FFF;
+      outline: none;
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: border 0.3s ease;
+    }
+
+    .input-field:focus {
+      border-color: var(--gold-primary);
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+      .content-card {
+        grid-template-columns: 1fr;
+        gap: 25px;
+      }
+      .visual-stage {
+        display: none;
+      }
+      .portal-nav {
+        right: 1.5vw;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Interactive Golden Particle Cursor Canvas -->
+  <canvas id="cursor-canvas"></canvas>
+
+  <!-- Pure Math 3D Wireframe Scene Canvas -->
+  <canvas id="ambient-canvas"></canvas>
+
+  <!-- Translucent Darkening Veil for Portal Morphing -->
+  <div class="liquid-veil" id="liquidVeil"></div>
+
+  <!-- Pure SVG Liquid Iris Morphing Shutter -->
+  <div class="iris-portal">
+    <svg viewBox="0 0 1000 1000" preserveAspectRatio="none">
+      <circle id="irisRing1" class="iris-path" cx="500" cy="500" r="10"></circle>
+      <polygon id="irisHex" class="iris-path" points="500,480 520,500 500,520 480,500"></polygon>
+    </svg>
+  </div>
+
+  <!-- FIXED HEADER -->
+  <header>
+    <div class="brand">
+      <!-- Inline Crown SVG -->
+      <svg class="brand-svg" viewBox="0 0 24 24">
+        <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5m14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/>
+      </svg>
+      <div class="brand-text">
+        <h1>HARIHARAN</h1>
+        <span>Event Management</span>
+      </div>
+    </div>
+    <button class="btn-gold" style="padding: 12px 24px; font-size: 0.75rem;" onclick="jumpToChamber(3)">
+      Initiate Brief
+    </button>
+  </header>
+
+  <!-- DYNAMIC MORPHING SIDEBAR CONSTELLATION -->
+  <nav class="portal-nav" id="portalNav">
+    <div class="portal-dot active" onclick="jumpToChamber(0)"><span>Genesis</span></div>
+    <div class="portal-dot" onclick="jumpToChamber(1)"><span>Disciplines</span></div>
+    <div class="portal-dot" onclick="jumpToChamber(2)"><span>Milestones</span></div>
+    <div class="portal-dot" onclick="jumpToChamber(3)"><span>Consultation</span></div>
+  </nav>
+
+  <!-- 3D SPATIAL CHAMBERS -->
+  <div class="viewport-scene">
+
+    <!-- CHAMBER 0: GENESIS -->
+    <section class="chamber active" data-index="0">
+      <div class="content-card">
+        <div>
+          <span class="tagline">Chamber I &mdash; Genesis</span>
+          <h2 class="title">Orchestrating <br><span class="gold-gradient">Sovereign Grandeur</span></h2>
+          <p class="description">
+            Hariharan Event Management transitions ordinary milestones into extraordinary sensory realities. Experience seamless spatial event production sculpted with architectural opulence.
+          </p>
+          <button class="btn-gold" onclick="nextChamber()">
+            <span>Enter Dimensions &rarr;</span>
+          </button>
+        </div>
+        <div class="visual-stage visual-bg-1">
+          <div class="stage-badge">
+            <h4 style="font-size: 1rem; color: #FFF;">The Palace Pavilion</h4>
+            <p style="font-size: 0.75rem; color: var(--gold-light); margin:0;">Heritage Gala Architecture</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAMBER 1: DISCIPLINES -->
+    <section class="chamber" data-index="1">
+      <div class="content-card">
+        <div>
+          <span class="tagline">Chamber II &mdash; Disciplines</span>
+          <h2 class="title">Bespoke Event <br><span class="gold-gradient">Mastery</span></h2>
+          <p class="description">
+            From imperial destination weddings to multi-thousand attendee summits, every production is precision-engineered from concept blueprints to flawless execution.
+          </p>
+          <div class="feature-grid">
+            <div class="feature-box">
+              <svg class="feature-svg" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+              </svg>
+              <h4 style="margin-bottom: 6px;">Royal Weddings</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Palatial mandap structures and choreographed pageantry.</p>
+            </div>
+            <div class="feature-box">
+              <svg class="feature-svg" viewBox="0 0 24 24">
+                <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
+              </svg>
+              <h4 style="margin-bottom: 6px;">Arena Galas</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Kinetic truss lighting, laser choreography & acoustics.</p>
+            </div>
+          </div>
+        </div>
+        <div class="visual-stage visual-bg-2">
+          <div class="stage-badge">
+            <h4 style="font-size: 1rem; color: #FFF;">Audio-Visual Apex</h4>
+            <p style="font-size: 0.75rem; color: var(--gold-light); margin:0;">Dynamic 3D Laser Architecture</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAMBER 2: MILESTONES -->
+    <section class="chamber" data-index="2">
+      <div class="content-card">
+        <div>
+          <span class="tagline">Chamber III &mdash; Living Legacies</span>
+          <h2 class="title">Curated <br><span class="gold-gradient">Masterpieces</span></h2>
+          <p class="description">
+            Over 12 years and 550+ elite functions delivered with uncompromising aesthetic precision across India and global luxury destinations.
+          </p>
+          <div style="display: flex; gap: 40px; margin-bottom: 30px;">
+            <div>
+              <h3 style="font-family: var(--font-heading); font-size: 2.4rem; color: var(--gold-primary);">550+</h3>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Grand Galas</p>
+            </div>
+            <div>
+              <h3 style="font-family: var(--font-heading); font-size: 2.4rem; color: var(--gold-primary);">99.8%</h3>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Flawless Delivery</p>
+            </div>
+          </div>
+          <button class="btn-gold" onclick="nextChamber()">
+            <span>Reserve Consultation &rarr;</span>
+          </button>
+        </div>
+        <div class="visual-stage visual-bg-3">
+          <div class="stage-badge">
+            <h4 style="font-size: 1rem; color: #FFF;">Imperial Standard</h4>
+            <p style="font-size: 0.75rem; color: var(--gold-light); margin:0;">Private VIP Environments</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAMBER 3: CONSULTATION -->
+    <section class="chamber" data-index="3">
+      <div class="content-card" style="grid-template-columns: 0.9fr 1.1fr;">
+        <div>
+          <span class="tagline">Chamber IV &mdash; Communion</span>
+          <h2 class="title">Begin The <br><span class="gold-gradient">Masterpiece</span></h2>
+          <p class="description">
+            Directly connect with our Creative Direction Board. We formulate preliminary 3D environment blueprints and financial staging models within 48 hours.
+          </p>
+          <div style="display: grid; gap: 15px; color: var(--text-muted); font-size: 0.95rem;">
+            <div><strong style="color:var(--gold-primary);">&#9742;</strong> +91 (0) 98765 43210</div>
+            <div><strong style="color:var(--gold-primary);">&#9993;</strong> director@hariharanevents.com</div>
+            <div><strong style="color:var(--gold-primary);">&#9906;</strong> The Heritage Grand Boulevard</div>
+          </div>
+        </div>
+
+        <form class="contact-panel" onsubmit="event.preventDefault(); alert('Your vision has been registered. Hariharan Event Management will contact you.');">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <input type="text" class="input-field" placeholder="Full Name" required />
+            <input type="tel" class="input-field" placeholder="Phone Number" required />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <select class="input-field" required>
+              <option value="" disabled selected>Select Event Horizon</option>
+              <option>Royal Destination Wedding</option>
+              <option>Global Corporate Gala</option>
+              <option>Arena Concert & Visual Production</option>
+              <option>Bespoke Private Anniversary</option>
+            </select>
+          </div>
+          <textarea rows="3" class="input-field" placeholder="Describe your creative aspirations..." style="margin-bottom: 20px;"></textarea>
+          <button type="submit" class="btn-gold" style="width: 100%; justify-content: center;">
+            Dispatch Creative Brief
+          </button>
+        </form>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ==========================================================
+       OFFLINE SPATIAL ENGINE & CANVAS 3D MATHEMATICS
+       ========================================================== */ -->
+  <script>
+    /* 1. CHAMBER PORTAL TRANSITION CONTROLLER */
+    let currentChamber = 0;
+    let isTransitioning = false;
+    const chambers = document.querySelectorAll('.chamber');
+    const dots = document.querySelectorAll('.portal-dot');
+    const liquidVeil = document.getElementById('liquidVeil');
+    const irisRing = document.getElementById('irisRing1');
+    const irisHex = document.getElementById('irisHex');
+
+    function jumpToChamber(targetIndex) {
+      if (targetIndex === currentChamber || isTransitioning) return;
+      if (targetIndex < 0 || targetIndex >= chambers.length) return;
+
+      isTransitioning = true;
+      const forward = targetIndex > currentChamber;
+
+      liquidVeil.classList.add('active');
+      triggerIrisAnimation();
+
+      const outgoing = chambers[currentChamber];
+      outgoing.classList.remove('active');
+      outgoing.classList.add(forward ? 'recede-back' : 'wait-front');
+
+      dots[currentChamber].classList.remove('active');
+      dots[targetIndex].classList.add('active');
+
+      const incoming = chambers[targetIndex];
+      incoming.classList.remove('recede-back', 'wait-front');
+      incoming.classList.add(forward ? 'wait-front' : 'recede-back');
+
+      setTimeout(() => {
+        incoming.classList.remove('wait-front', 'recede-back');
+        incoming.classList.add('active');
+        // Morph the 3D mathematical core
+        geometryScaleTarget = 1.0 + (targetIndex * 0.15);
+      }, 500);
+
+      setTimeout(() => {
+        outgoing.classList.remove('recede-back', 'wait-front');
+        liquidVeil.classList.remove('active');
+        currentChamber = targetIndex;
+        isTransitioning = false;
+      }, 1200);
+    }
+
+    function nextChamber() {
+      jumpToChamber((currentChamber + 1) % chambers.length);
+    }
+
+    function prevChamber() {
+      jumpToChamber((currentChamber - 1 + chambers.length) % chambers.length);
+    }
+
+    function triggerIrisAnimation() {
+      let start = null;
+      function step(timestamp) {
+        if (!start) start = timestamp;
+        let progress = (timestamp - start) / 1000;
+
+        if (progress < 1) {
+          let radius = 10 + Math.sin(progress * Math.PI) * 750;
+          irisRing.setAttribute('r', Math.max(10, radius));
+          irisRing.style.opacity = Math.sin(progress * Math.PI);
+
+          let scale = 1 + Math.sin(progress * Math.PI) * 45;
+          irisHex.setAttribute('transform', `translate(500, 500) rotate(${progress * 180}) scale(${scale}) translate(-500, -500)`);
+          irisHex.style.opacity = Math.sin(progress * Math.PI);
+
+          requestAnimationFrame(step);
+        } else {
+          irisRing.setAttribute('r', 10);
+          irisRing.style.opacity = 0;
+          irisHex.style.opacity = 0;
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+    // Wheel listener
+    let wheelCooldown = false;
+    window.addEventListener('wheel', (e) => {
+      if (wheelCooldown || isTransitioning) return;
+      if (e.deltaY > 35) { nextChamber(); triggerCooldown(); }
+      else if (e.deltaY < -35) { prevChamber(); triggerCooldown(); }
+    }, { passive: true });
+
+    function triggerCooldown() {
+      wheelCooldown = true;
+      setTimeout(() => { wheelCooldown = false; }, 1000);
+    }
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') nextChamber();
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') prevChamber();
+    });
+
+    /* 2. PURE MATHEMATICAL 3D PERSPECTIVE CANVAS ENGINE (NO CDNs) */
+    const ambientCanvas = document.getElementById('ambient-canvas');
+    const aCtx = ambientCanvas.getContext('2d');
+    let width, height;
+    let geometryScale = 1.0;
+    let geometryScaleTarget = 1.0;
+
+    function resizeAmbientCanvas() {
+      width = ambientCanvas.width = window.innerWidth;
+      height = ambientCanvas.height = window.innerHeight;
+    }
+    resizeAmbientCanvas();
+    window.addEventListener('resize', resizeAmbientCanvas);
+
+    // Generate 3D Polyhedron Vertices
+    const phi = (1 + Math.sqrt(5)) / 2;
+    const baseVertices = [
+      [-1,  phi, 0], [ 1,  phi, 0], [-1, -phi, 0], [ 1, -phi, 0],
+      [ 0, -1,  phi], [ 0,  1,  phi], [ 0, -1, -phi], [ 0,  1, -phi],
+      [ phi, 0, -1], [ phi, 0,  1], [-phi, 0, -1], [-phi, 0,  1]
+    ];
+
+    // Connect wireframe edges
+    const edges = [];
+    for (let i = 0; i < baseVertices.length; i++) {
+      for (let j = i + 1; j < baseVertices.length; j++) {
+        const d = Math.hypot(
+          baseVertices[i][0] - baseVertices[j][0],
+          baseVertices[i][1] - baseVertices[j][1],
+          baseVertices[i][2] - baseVertices[j][2]
+        );
+        if (Math.abs(d - 2) < 0.05) edges.push([i, j]);
+      }
+    }
+
+    // 3D Stardust Particle Field
+    const stardust = [];
+    for (let i = 0; i < 160; i++) {
+      stardust.push({
+        x: (Math.random() - 0.5) * 1200,
+        y: (Math.random() - 0.5) * 800,
+        z: Math.random() * 800 + 100,
+        speedZ: Math.random() * 0.8 + 0.3
+      });
+    }
+
+    let rotX = 0, rotY = 0;
+
+    function render3D() {
+      aCtx.clearRect(0, 0, width, height);
+
+      rotX += 0.005;
+      rotY += 0.008;
+      geometryScale += (geometryScaleTarget - geometryScale) * 0.05;
+
+      const fov = 450;
+      const centerX = width * 0.72;
+      const centerY = height * 0.5;
+
+      // Project & Draw 3D Stardust Particles
+      aCtx.fillStyle = 'rgba(247, 231, 180, 0.4)';
+      for (let p of stardust) {
+        p.z -= p.speedZ;
+        if (p.z <= 10) p.z = 900;
+
+        let scale = fov / p.z;
+        let px = width / 2 + p.x * scale;
+        let py = height / 2 + p.y * scale;
+
+        if (px >= 0 && px <= width && py >= 0 && py <= height) {
+          aCtx.beginPath();
+          aCtx.arc(px, py, Math.max(0.5, 1.6 * scale), 0, Math.PI * 2);
+          aCtx.fill();
+        }
+      }
+
+      // Rotate & Project Polyhedron
+      const projected = baseVertices.map(v => {
+        let x = v[0] * 120 * geometryScale;
+        let y = v[1] * 120 * geometryScale;
+        let z = v[2] * 120 * geometryScale;
+
+        // Rotation Matrix X
+        let y1 = y * Math.cos(rotX) - z * Math.sin(rotX);
+        let z1 = y * Math.sin(rotX) + z * Math.cos(rotX);
+
+        // Rotation Matrix Y
+        let x2 = x * Math.cos(rotY) + z1 * Math.sin(rotY);
+        let z2 = -x * Math.sin(rotY) + z1 * Math.cos(rotY);
+
+        let pScale = fov / (fov + z2 + 250);
+        return {
+          x: centerX + x2 * pScale,
+          y: centerY + y1 * pScale,
+          z: z2
+        };
+      });
+
+      // Draw Wireframe
+      aCtx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+      aCtx.lineWidth = 1.5;
+      for (let edge of edges) {
+        const p1 = projected[edge[0]];
+        const p2 = projected[edge[1]];
+        aCtx.beginPath();
+        aCtx.moveTo(p1.x, p1.y);
+        aCtx.lineTo(p2.x, p2.y);
+        aCtx.stroke();
+      }
+
+      // Draw Polyhedron Vertices
+      for (let p of projected) {
+        aCtx.fillStyle = '#D4AF37';
+        aCtx.beginPath();
+        aCtx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        aCtx.fill();
+      }
+
+      requestAnimationFrame(render3D);
+    }
+    render3D();
+
+    /* 3. FLUID GOLDEN STARDUST CURSOR */
+    const cursorCanvas = document.getElementById('cursor-canvas');
+    const cCtx = cursorCanvas.getContext('2d');
+    let particles = [];
+
+    function resizeCursorCanvas() {
+      cursorCanvas.width = window.innerWidth;
+      cursorCanvas.height = window.innerHeight;
+    }
+    resizeCursorCanvas();
+    window.addEventListener('resize', resizeCursorCanvas);
+
+    window.addEventListener('mousemove', (e) => {
+      for (let i = 0; i < 2; i++) {
+        particles.push({
+          x: e.clientX,
+          y: e.clientY,
+          size: Math.random() * 2.5 + 1,
+          speedX: (Math.random() - 0.5) * 1.5,
+          speedY: (Math.random() - 0.5) * 1.5,
+          color: Math.random() > 0.5 ? '#D4AF37' : '#F7E7B4',
+          alpha: 1
+        });
+      }
+    });
+
+    function renderCursor() {
+      cCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+      for (let i = 0; i < particles.length; i++) {
+        let p = particles[i];
+        cCtx.fillStyle = p.color;
+        cCtx.globalAlpha = p.alpha;
+        cCtx.beginPath();
+        cCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        cCtx.fill();
+
+        p.x += p.speedX;
+        p.y += p.speedY;
+        p.alpha -= 0.025;
+
+        if (p.alpha <= 0) {
+          particles.splice(i, 1);
+          i--;
+        }
+      }
+      cCtx.globalAlpha = 1;
+      requestAnimationFrame(renderCursor);
+    }
+    renderCursor();
+  </script>
+</body>
+</html>
